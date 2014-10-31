@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block body %}
+<h2>{{ prob["title"] }}</h2>
+<a href="/submit?pid={{ prob["_id"] }}">Submit</a>
+<a href="/status?pid={{ prob["_id"] }}">Status</a>
+<a href="{% if 'referer' in request.headers %}{{ request.headers['referer'] }}{% else %}list{% end %}">Back</a>
+<pre>{{ prob["content"] }}</pre>
+<a href="/submit?pid={{ prob["_id"] }}">Submit</a>
+<a href="/status?pid={{ prob["_id"] }}">Status</a>
+<a href="{% if 'referer' in request.headers %}{{ request.headers['referer'] }}{% else %}list{% end %}">Back</a>
+{% end %}

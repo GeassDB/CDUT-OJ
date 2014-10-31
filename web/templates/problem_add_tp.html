@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block body %}
+<form action="add_tp" method="POST">
+    {% module xsrf_form_html() %}
+    Problem ID:
+    <input type="number" name="pid" required="required"
+    value="{% if "pid" in request.arguments%}{{ handler.get_argument("pid") }}{% end %}"/>
+    <p>input</p>
+    <textarea rows="24" cols="72" name="input"></textarea></br>
+    <p>output</p>
+    <textarea rows="24" cols="72" name="output"></textarea></br>
+    <input type="submit" value="Submit"/>
+</form>
+{% end %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block body %}
+<form action="submit" method="POST">
+    {% module xsrf_form_html() %}
+    Problem ID:
+    <input type="number" name="pid" required="required"
+    value="{% if "pid" in request.arguments%}{{ handler.get_argument("pid") }}{% end %}"/>
+    Language:
+    <select name="lang">
+        <option value="0" {% if handler.get_cookie("def_lang") == "0" %}selected{% end %}>C</option>
+        <option value="1" {% if handler.get_cookie("def_lang") == "1" %}selected{% end %}>C++</option>
+        <option value="2" {% if handler.get_cookie("def_lang") == "2" %}selected{% end %}>Java</option>
+        <option value="3" {% if handler.get_cookie("def_lang") == "3" %}selected{% end %}>Pascal</option>
+    </select>
+    <p>Choose a file</p>
+    <!--<input type="file" id="upload_file" name="upload_file"/></br>-->
+    <p>or paste/edit your code here.</p>
+    <textarea rows="24" cols="72" name="src"></textarea></br>
+    <input type="submit" value="Submit"/>
+</form>
+{% end %}

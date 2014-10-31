@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block body %}
+<form action="add" method="POST">
+    {% module xsrf_form_html() %}
+    Problem ID:
+    <input type="number" name="pid" required="required"
+    value="{% if "pid" in request.arguments%}{{ handler.get_argument("pid") }}{% end %}"/>
+    Score:
+    <input type="number" name="score" required="required"
+    value="{% if "score" in request.arguments%}{{ handler.get_argument("score") }}{% end %}"/>
+    Title:
+    <input type="text" name="title" required="required"
+    value="{% if "title" in request.arguments%}{{ handler.get_argument("title") }}{% end %}"/>
+    <p>content</p>
+    <textarea rows="24" cols="72" name="content"></textarea></br>
+    <input type="submit" value="Submit"/>
+</form>
+{% end %}

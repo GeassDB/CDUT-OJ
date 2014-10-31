@@ -1,0 +1,316 @@
+#!/usr/bin/env python
+#MyQSL ver.
+
+import os.path
+import string
+import re
+
+import torndb   #request torndb 1.0.6
+import tornado.ioloop
+import tornado.web
+import tornado.options
+import tornado.httpserver
+from tornado.options import define, options
+
+import hashlib
+
+
+#RFC 2822 Email Address
+EMAIL_REGEX = re.compile(r"""(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])""")
+
+
+define("port", default = 8888, type = int, help = "port to listen")
+define("db_host", default = "127.0.0.1:3306", help = "database host")
+define("db_name", default = "oj", help = "database name")
+define("db_user", default = "oj", help = "database user")
+define("db_pw", default = "oj", help = "database password")
+define("db_time_zone", default = "+8:00", help = "database time zone")
+
+
+class Application(tornado.web.Application):
+    def __init__(self):
+        handlers = [
+                (r"/", MainHandler),
+                (r"/submit", SubmitHandler),
+
+                (r"/status", StatusHandler),
+                (r"/status/(\d*)", StatusSourceHandler),
+
+                (r"/user", UserHandler),
+                (r"/user/list", UserListHandler),
+
+                (r"/auth/login", LoginHandler),
+                (r"/auth/logout", LogoutHandler),
+                (r"/auth/register", RegisterHandler),
+
+                (r"/problem/list", ProblemListHandler),
+                (r"/problem/add", ProblemAddHandler),
+                (r"/problem/edit", ProblemEditHandler),
+                (r"/problem/(\d*)", ProblemHandler),
+                ]
+
+        settings = dict(
+                title = "CDUT Online Judge",
+                template_path = os.path.join(os.path.dirname(__file__), "templates"),
+                static_path = os.path.join(os.path.dirname(__file__), "static"),
+                languages = ["C", "C++", "Java", "Pascal"],
+                login_url = "auth/login",
+                cookie_secret = "test",
+                xsrf_cookies = True,
+                debug = True,
+                )
+
+        tornado.web.Application.__init__(self, handlers, **settings)
+
+        self.db = torndb.Connection(
+                host = options.db_host, database = options.db_name,
+                user = options.db_user, password = options.db_pw,
+                time_zone = options.db_time_zone,
+                )
+
+
+class BaseHandler(tornado.web.RequestHandler):
+    @property
+    def db(self):
+        return self.application.db
+
+    def get_current_user(self):
+        uid = self.get_secure_cookie("uid")
+        if not uid:
+            print("debug: no current user")
+            return None
+        print("debug: uid = " + uid)
+        if not uid.isdigit():
+            print("debug: invilid uid")
+            return None
+        current_userinfo = self.db.get("SELECT * FROM users WHERE uid = %s", uid)
+        return current_userinfo
+
+
+class MainHandler(BaseHandler):
+    def get(self):
+        self.render("index.html")
+
+
+class SubmitHandler(BaseHandler):
+    @tornado.web.authenticated
+    def get(self):
+        self.render("submit.html")
+
+    def post(self):
+        if not self.get_argument("pid").isdigit()\
+                or not self.db.get("SELECT pid FROM problems WHERE pid = %s",
+                        self.get_argument("pid"))\
+                or not self.get_argument("lang").isdigit()\
+                or int(self.get_argument("lang")) > len(self.settings["languages"]):
+            raise tornado.web.HTTPError(400)
+        else:
+            self.db.execute("INSERT INTO status(uid, username, pid, language, result, submit_time, code) VALUES(%s, %s, %s, %s, 0, NOW(), %s)",
+                    self.current_user.uid,
+                    self.current_user.username,
+                    self.get_argument("pid"),
+                    self.get_argument("lang"),
+                    self.get_argument("src"),
+                    )
+
+            self.set_cookie("def_lang", self.get_argument("lang"), expires_days=30)
+            self.redirect("status?pid={}".format(self.get_argument("pid")))#TODO:add pid
+
+
+class StatusHandler(BaseHandler):
+    result_code = [
+            "Waiting",
+            "Judging",
+            "Accepted",
+            "Compile Error",
+            "Wrong Answer",
+            "Time Limit Exceeded",
+            "Memory Limit Exceeded",
+            ]
+
+    def get(self):
+
+        #TODO:add filter
+        if "top" in self.request.arguments:
+            status_list = self.db.query("SELECT * FROM status WHERE sid < %s ORDER BY sid DESC LIMIT 20",
+                    self.get_argument("top"))
+        elif "bottom" in self.request.arguments:
+            status_list = self.db.query("SELECT * FROM status WHERE sid > %s LIMIT 20",
+                    self.get_argument("bottom"))[::-1]
+        else:
+            status_list = self.db.query("SELECT * FROM status ORDER BY sid DESC LIMIT 20")
+
+        self.render("status.html", status_list = status_list)
+
+
+class StatusSourceHandler(BaseHandler):
+    def get(self, sid):
+        code = self.db.get("SELECT code FROM status WHERE sid = %s", sid).code
+        self.render("source.html", code = code)
+
+
+class UserHandler(BaseHandler):
+    def get(self):
+        pass
+
+
+class UserListHandler(BaseHandler):
+    def get(self):
+        pass
+
+
+class LoginHandler(BaseHandler):
+    page_errors = [
+            "Username does not exist.",
+            "Wrong password.",
+            ]
+    def get(self):
+        if self.current_user:
+            self.redirect("/")
+            return
+        self.render("login.html")
+
+    def post(self):
+        if not self.get_argument("username").replace('_','0').isalnum() \
+                or len(self.get_argument("username")) > 32:
+                    self.redirect("login?type=0")
+        user_info = self.db.get("SELECT * FROM users WHERE username = %s",
+                self.get_argument("username"))
+        if not user_info:
+            self.redirect("login?type=0")
+        elif hashlib.sha512(self.get_argument("username").lower()+\
+                self.get_argument("password")).digest() == user_info.password:
+            if "remember" in self.request.arguments:
+                self.set_secure_cookie("uid", str(user_info.uid))
+            else:
+                self.set_secure_cookie("uid", str(user_info.uid), None)
+            if "next" in self.request.arguments:
+                self.redirect(self.get_argument("next"))
+            else:
+                self.redirect("/")
+        else:
+            self.redirect("login?type=1")
+
+
+class LogoutHandler(BaseHandler):
+    def get(self):
+        self.clear_all_cookies()
+        self.redirect("/")
+
+
+class RegisterHandler(BaseHandler):
+    page_errors = [
+            "Invalid username.",
+            "The entered passwords do not match.",
+            "Invalid E-mail address.",
+            "Invalid student id.",
+            ]
+
+    def get(self):
+        if self.current_user:
+            self.redirect("/")
+            return
+        self.render("register.html")
+
+    def post(self):
+        if self.current_user:
+            self.redirect("/")
+            return
+
+        if not self.get_argument("username").replace('_','0').isalnum() \
+                or len(self.get_argument("username")) > 32 \
+                or self.db.get("SELECT * FROM users WHERE username = %s",
+                        self.get_argument("username")):
+            self.redirect("register?type=0&email={0}&stu_id={1}".format(
+                self.get_argument("email"),
+                self.get_argument("stu_id"),
+                ))
+        elif self.get_argument("password") != self.get_argument("confirm"):
+            self.redirect("register?type=1&username={0}&email={1}&stu_id={2}".format(
+                self.get_argument("username"),
+                self.get_argument("email"),
+                self.get_argument("stu_id"),
+                ))
+        elif not EMAIL_REGEX.match(self.get_argument("email")) \
+                or len(self.get_argument("email")) > 320 \
+                or self.db.get("SELECT * FROM users WHERE email = %s",
+                        self.get_argument("email")):
+            self.redirect("register?type=2&username={0}&stu_id={1}".format(
+                self.get_argument("username"),
+                self.get_argument("stu_id"),
+                ))
+        elif self.get_argument("stu_id") \
+                and (not self.get_argument("stu_id").isdigit() \
+                or len(self.get_argument("stu_id")) != 12 \
+                or self.db.get("SELECT * FROM users WHERE stu_id = %s",
+                        self.get_argument("stu_id"))):
+            self.redirect("register?type=3&username={0}&email={1}".format(
+                self.get_argument("username"),
+                self.get_argument("email"),
+                ))
+        else:
+            if self.get_argument("stu_id"):
+                uid = self.db.execute("INSERT INTO users(username, email, password, stu_id)\
+                        VALUES(%s, %s, %s, %s)",
+                        self.get_argument("username"),
+                        self.get_argument("email"),
+                        hashlib.sha512(self.get_argument("username").lower()+\
+                                self.get_argument("password")).digest(),
+                        self.get_argument("stu_id"),
+                        )
+            else:
+                uid = self.db.execute("INSERT INTO users(username, email, password)\
+                        VALUES(%s, %s, %s)",
+                        self.get_argument("username"),
+                        self.get_argument("email"),
+                        hashlib.sha512(self.get_argument("username").lower()+\
+                                self.get_argument("password")).digest(),
+                        )
+            self.set_secure_cookie("uid", str(uid))
+            self.redirect("/")
+
+
+class ProblemListHandler(BaseHandler):
+    def get(self):
+        if not self.get_cookie("problem_per_page"):
+            self.set_cookie("problem_per_page", "30", expires_days=30)
+            problem_per_page = 30
+        else:
+            problem_per_page = int(self.get_cookie("problem_per_page"))
+
+        if "page" in self.request.arguments:
+            problem_list = self.db.query("SELECT * FROM problems WHERE pid >= %s LIMIT %s",
+                    problem_per_page * (self.get_argument("page") - 1),
+                    problem_per_page)
+        else:
+            problem_list = self.db.query("SELECT * FROM problems LIMIT %s",
+                    problem_per_page)
+
+        self.render("problem_list.html", problem_list = problem_list)
+        
+
+class ProblemAddHandler(BaseHandler):
+    def get(self):
+        pass
+
+
+class ProblemEditHandler(BaseHandler):
+    def get(self):
+        pass
+
+
+class ProblemHandler(BaseHandler):
+    def get(self, pid):
+        prob = self.db.get("SELECT * FROM problems WHERE pid = %s", pid)
+
+        if not prob:
+            raise tornado.web.HTTPError(404)
+        else:
+            self.render("problem.html", prob = prob)
+
+
+if __name__ == "__main__":
+    tornado.options.parse_command_line()
+    http_server = tornado.httpserver.HTTPServer(Application())
+    http_server.listen(options.port)
+    tornado.ioloop.IOLoop.instance().start()

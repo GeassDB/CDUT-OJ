@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block body %}
+<a href="problem/list">Problems</a><br/>
+{% if current_user %}
+    <a href="submit">Submit</a><br/>
+    <a href="status">Status</a><br/>
+    <a href="auth/logout">Logout</a><br/>
+{% else %}
+    <a href="auth/login">Login</a><br/>
+{% end %}
+{% end %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block body %}
+<TABLE cellSpacing="0" width="100%" border="1" bordercolor="#FFFFFF">
+    <tr>
+        <th width="20%">Student ID</a></th>
+        <th width="16%">Name</th>
+        <th width="44%">AC List</a></th>
+        <th width="10%">Score</a></th>
+    </tr>
+    {% for user in user_list %}
+    <tr>
+        <td><a href="{{ user["_id"] }}">{{ user["_id"] }}</td>
+        <td><a href="{{ user["_id"] }}">{{ user["name"] }}</a></td>
+        <td>{{ user["ac_list"] }}</td>
+        <td>{{ user["score"] }}</td>
+    </tr>
+    {% end %}
+</table>
+{% end %}

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
+        <title>{{ handler.settings["title"] }}</title>
+        {% block head %}{% end %}
+    </head>
+    <body>
+        <div id="body">
+            <div id="header">
+            </div>
+            <div id="content">{% block body %}{% end %}</div>
+        </div>
+        {% block bottom %}{% end %}
+    </body>
+</html>

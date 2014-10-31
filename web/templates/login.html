@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block body %}
+{% if "next" in request.arguments %}
+<p>Please login first.</p>
+{% end %}
+<form action="login" method="POST">
+    {% module xsrf_form_html() %}
+    <input type="text" name="stu_id" required="required" pattern="[0-9]{12}" title="12 figures Student ID" placeholder="Student ID"
+    {% if "stu_id" in request.arguments %}
+        value="{{ handler.get_argument("stu_id") }}"
+    {% end %}/><br/>
+    <input type="text" name="username" required="required" placeholder="Your Name" maxlength=32
+    title="Your Name"
+    {% if "username" in request.arguments %}
+        value="{{ handler.get_argument("username") }}"
+    {% end %}/><br/>
+    <input type="password" name="password" required="required" placeholder="Password" maxlength=32/><br/>
+    {% if "next" in request.arguments %}
+        <input type="hidden" name="next" value="{{ handler.get_argument("next") }}"/>
+    {% end %}
+    <input type="checkbox" name="remember" id="remember"/>
+    <label for="remember">Remember me.</label>
+    <input type="submit" value="login"/><br/>
+    {% if "type" in request.arguments %}
+        <p>{{ handler.page_errors[int(handler.get_argument("type"))] }}</p>
+    {% end %}
+</form>
+{% end %}
